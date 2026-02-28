@@ -1,0 +1,308 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import '../../data/models/news.dart';
+import '../../providers/providers.dart';
+
+class WebViewScreen extends ConsumerStatefulWidget {
+  final String url;
+  final String title;
+  final News? news;
+
+  const WebViewScreen({
+    super.key,
+    required this.url,
+    required this.title,
+    this.news,
+  });
+
+  @override
+  ConsumerState<WebViewScreen> createState() => _WebViewScreenState();
+}
+
+class _WebViewScreenState extends ConsumerState<WebViewScreen> {
+  late final WebViewController _controller;
+  bool _isLoading = true;
+  int _errorCount = 0;
+  String? _lastError;
+  String? _currentUrl;
+  String? _blockedUrl;
+
+  final List<String> _blockedSchemes = [
+    'zhihu://',
+    'weibo://',
+    'douyin://',
+    'baidu://',
+    'bilibili://',
+    'toutiao://',
+    'bytedance://',
+    'intent://',
+    'toutiaoshare://',
+    'snssdk://',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _recordReadHistory();
+    _initWebView();
+  }
+
+  void _recordReadHistory() {
+    if (widget.news != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(readHistoryProvider.notifier).addToHistory(widget.news!);
+      });
+    }
+  }
+
+  void _initWebView() {
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (String url) {
+            debugPrint('WebView loading: $url');
+            setState(() {
+              _isLoading = true;
+              _lastError = null;
+              _currentUrl = url;
+            });
+          },
+          onPageFinished: (String url) {
+            debugPrint('WebView finished: $url');
+            setState(() {
+              _isLoading = false;
+              _errorCount = 0;
+              _currentUrl = url;
+            });
+          },
+          onWebResourceError: (WebResourceError error) {
+            debugPrint('WebView error: ${error.description}');
+            _errorCount++;
+            _lastError = error.description;
+            if (_errorCount >= 3) {
+              setState(() {
+                _isLoading = false;
+              });
+            }
+          },
+          onNavigationRequest: (NavigationRequest request) {
+            final url = request.url;
+            debugPrint('WebView navigation: $url');
+            
+            if (_isAppScheme(url)) {
+              _showBlockedBanner(url);
+              return NavigationDecision.prevent;
+            }
+            
+            return NavigationDecision.navigate;
+          },
+        ),
+      );
+    
+    debugPrint('WebView loading: ${widget.url}');
+    if (widget.url.isNotEmpty) {
+      _controller.loadRequest(Uri.parse(widget.url));
+    }
+  }
+
+  bool _isAppScheme(String url) {
+    for (final scheme in _blockedSchemes) {
+      if (url.startsWith(scheme)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _showBlockedBanner(String url) {
+    setState(() {
+      _blockedUrl = url;
+    });
+  }
+
+  void _hideBlockedBanner() {
+    setState(() {
+      _blockedUrl = null;
+    });
+  }
+
+  void _openBlockedUrl() {
+    if (_blockedUrl != null) {
+      _openInBrowser(_blockedUrl);
+      _hideBlockedBanner();
+    }
+  }
+
+  Future<void> _openInBrowser(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.url.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.title)),
+        body: const Center(
+          child: Text('无效的链接'),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 16),
+            ),
+            if (_currentUrl != null)
+              Text(
+                _currentUrl!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+              ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              setState(() {
+                _errorCount = 0;
+                _lastError = null;
+              });
+              _controller.reload();
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.open_in_browser),
+            tooltip: '用浏览器打开',
+            onPressed: () => _openInBrowser(widget.url),
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              switch (value) {
+                case 'back':
+                  _controller.goBack();
+                  break;
+                case 'forward':
+                  _controller.goForward();
+                  break;
+                case 'browser':
+                  _openInBrowser(widget.url);
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'back',
+                child: Row(
+                  children: [
+                    Icon(Icons.arrow_back),
+                    SizedBox(width: 8),
+                    Text('后退'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'forward',
+                child: Row(
+                  children: [
+                    Icon(Icons.arrow_forward),
+                    SizedBox(width: 8),
+                    Text('前进'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'browser',
+                child: Row(
+                  children: [
+                    Icon(Icons.open_in_browser),
+                    SizedBox(width: 8),
+                    Text('用浏览器打开'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _controller),
+          if (_isLoading)
+            const LinearProgressIndicator(),
+          if (_blockedUrl != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildBlockedBanner(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlockedBanner() {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 8,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade100,
+        border: Border(
+          top: BorderSide(color: Colors.orange.shade300),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.orange.shade800, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '已阻止跳转: $_blockedUrl',
+              style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          TextButton(
+            onPressed: _openBlockedUrl,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              '用浏览器打开',
+              style: TextStyle(color: Colors.orange.shade700, fontSize: 13),
+            ),
+          ),
+          IconButton(
+            onPressed: _hideBlockedBanner,
+            icon: Icon(Icons.close, color: Colors.orange.shade800, size: 18),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+}
