@@ -60,6 +60,7 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
   void _initWebView() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent('Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -80,6 +81,12 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
           },
           onWebResourceError: (WebResourceError error) {
             debugPrint('WebView error: ${error.description}');
+            final isConnectionReset = error.description.contains('ERR_CONNECTION_RESET') ||
+                error.description.contains('net::ERR_CONNECTION_RESET');
+            if (isConnectionReset) {
+              _retryWithAlternateUrl();
+              return;
+            }
             _errorCount++;
             _lastError = error.description;
             if (_errorCount >= 3) {
@@ -105,6 +112,28 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
     debugPrint('WebView loading: ${widget.url}');
     if (widget.url.isNotEmpty) {
       _controller.loadRequest(Uri.parse(widget.url));
+    }
+  }
+
+  Future<void> _retryWithAlternateUrl() async {
+    final url = widget.url;
+    if (url.startsWith('https://')) {
+      final httpUrl = url.replaceFirst('https://', 'http://');
+      debugPrint('Retrying with HTTP: $httpUrl');
+      try {
+        await _controller.loadRequest(Uri.parse(httpUrl));
+      } catch (e) {
+        debugPrint('HTTP retry failed: $e');
+        setState(() {
+          _isLoading = false;
+          _lastError = '无法加载网页';
+        });
+      }
+    } else {
+      setState(() {
+        _isLoading = false;
+        _lastError = '无法加载网页';
+      });
     }
   }
 
@@ -245,6 +274,8 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
           WebViewWidget(controller: _controller),
           if (_isLoading)
             const LinearProgressIndicator(),
+          if (_lastError != null && !_isLoading && _currentUrl == null)
+            _buildErrorView(),
           if (_blockedUrl != null)
             Positioned(
               left: 0,
@@ -302,6 +333,64 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
             constraints: const BoxConstraints(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '无法加载网页',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _lastError ?? '网络连接失败',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _currentUrl = '';
+                        _lastError = null;
+                        _isLoading = true;
+                      });
+                      _controller.reload();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('重试'),
+                  ),
+                  const SizedBox(width: 16),
+                  OutlinedButton.icon(
+                    onPressed: () => _openInBrowser(widget.url),
+                    icon: const Icon(Icons.open_in_browser),
+                    label: const Text('用浏览器打开'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
