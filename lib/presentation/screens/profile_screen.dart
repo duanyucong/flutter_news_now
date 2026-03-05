@@ -44,58 +44,76 @@ class ProfileScreen extends ConsumerWidget {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 20,
-        bottom: 24,
+        top: MediaQuery.of(context).padding.top + 30,
+        bottom: 30,
         left: 20,
         right: 20,
       ),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+          colors: [
+            Color(0xFFE3F2FD),
+            Color(0xFFBBDEFB),
+            Color(0xFF90CAF9),
+          ],
         ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0xFF90CAF9),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         children: [
+          // 头像区域
           Container(
-            width: 80,
-            height: 80,
+            width: 100,
+            height: 100,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: Colors.white.withValues(alpha: 0.5),
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
-                width: 3,
+                color: Colors.white.withValues(alpha: 0.8),
+                width: 2,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
-            child: const Center(
-              child: Icon(
-                Icons.person,
-                size: 40,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(50),
+              child: Container(
                 color: Colors.white,
+                child: Image.asset(
+                  'assets/icons/app_icon.png',
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          // Slogan
           Text(
-            user.name,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'ID: ${user.id}',
+            '想你所想，见我所见',
             style: TextStyle(
-              fontSize: 13,
-              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: 16,
+              color: Colors.grey.shade700,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 2,
             ),
           ),
         ],

@@ -86,7 +86,7 @@ class LiveScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 45,
+              width: 55,
               child: Text(
                 item.time,
                 style: TextStyle(
