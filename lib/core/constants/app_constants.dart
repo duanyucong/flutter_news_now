@@ -11,6 +11,7 @@ class AppConstants {
   static const String userKey = 'user';
   static const String subscriptionsKey = 'subscriptions';
   static const String readHistoryKey = 'read_history';
+  static const String screenRotationKey = 'screen_rotation';
   
   // Max read history count
   static const int maxReadHistoryCount = 300;

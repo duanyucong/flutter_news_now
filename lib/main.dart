@@ -4,11 +4,17 @@ import 'core/theme/app_theme.dart';
 import 'providers/providers.dart';
 import 'presentation/screens/home_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 初始化屏幕旋转设置
+  final container = ProviderContainer();
+  await container.read(screenRotationProvider.notifier).initialized;
+  
   runApp(
-    const ProviderScope(
-      child: NewsNowApp(),
+    ProviderScope(
+      parent: container,
+      child: const NewsNowApp(),
     ),
   );
 }

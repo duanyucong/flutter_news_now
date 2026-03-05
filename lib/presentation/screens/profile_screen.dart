@@ -245,6 +245,15 @@ class ProfileScreen extends ConsumerWidget {
             _buildDivider(theme),
             _buildMenuItem(
               context: context,
+              icon: Icons.screen_rotation,
+              iconColor: Colors.green,
+              title: '屏幕旋转',
+              trailing: _buildRotationChip(context, ref),
+              onTap: () => _showRotationDialog(context, ref),
+            ),
+            _buildDivider(theme),
+            _buildMenuItem(
+              context: context,
               icon: Icons.info_outline,
               iconColor: Colors.grey,
               title: '关于',
@@ -334,6 +343,27 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildRotationChip(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final currentMode = ref.watch(screenRotationProvider);
+    
+    String rotationText = '跟随系统';
+    if (currentMode == ScreenRotationMode.portrait) rotationText = '竖屏';
+    if (currentMode == ScreenRotationMode.landscape) rotationText = '横屏';
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.dividerColor.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        rotationText,
+        style: theme.textTheme.bodySmall,
+      ),
+    );
+  }
+
   Widget _buildAboutSection(BuildContext context, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -391,6 +421,58 @@ class ProfileScreen extends ConsumerWidget {
       trailing: isSelected ? const Icon(Icons.check, color: AppColors.accentColor) : null,
       onTap: () {
         ref.read(themeModeProvider.notifier).setThemeMode(mode);
+        Navigator.pop(context);
+      },
+    );
+  }
+
+  void _showRotationDialog(BuildContext context, WidgetRef ref) {
+    final currentMode = ref.read(screenRotationProvider);
+    
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '选择屏幕旋转模式',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildRotationOption(context, ref, '跟随系统', ScreenRotationMode.followSystem, currentMode),
+            _buildRotationOption(context, ref, '竖屏锁定', ScreenRotationMode.portrait, currentMode),
+            _buildRotationOption(context, ref, '横屏锁定', ScreenRotationMode.landscape, currentMode),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRotationOption(BuildContext context, WidgetRef ref, String title, ScreenRotationMode mode, ScreenRotationMode currentMode) {
+    final isSelected = mode == currentMode;
+    return ListTile(
+      leading: Icon(
+        mode == ScreenRotationMode.followSystem
+            ? Icons.screen_rotation
+            : mode == ScreenRotationMode.portrait
+                ? Icons.stay_current_portrait
+                : Icons.stay_current_landscape,
+        color: isSelected ? AppColors.accentColor : null,
+      ),
+      title: Text(title),
+      trailing: isSelected ? const Icon(Icons.check, color: AppColors.accentColor) : null,
+      onTap: () {
+        ref.read(screenRotationProvider.notifier).setRotationMode(mode);
         Navigator.pop(context);
       },
     );

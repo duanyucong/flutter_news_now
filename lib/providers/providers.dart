@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:pinyin/pinyin.dart';
@@ -13,8 +14,14 @@ import '../data/repositories/news_repository.dart';
 
 enum AppThemeMode { light, dark, system }
 
+enum ScreenRotationMode { followSystem, portrait, landscape }
+
 final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, AppThemeMode>((ref) {
   return ThemeModeNotifier();
+});
+
+final screenRotationProvider = StateNotifierProvider<ScreenRotationNotifier, ScreenRotationMode>((ref) {
+  return ScreenRotationNotifier();
 });
 
 class ThemeModeNotifier extends StateNotifier<AppThemeMode> {
@@ -57,6 +64,77 @@ class ThemeModeNotifier extends StateNotifier<AppThemeMode> {
   }
 
   bool get isDark => state == AppThemeMode.dark;
+}
+
+class ScreenRotationNotifier extends StateNotifier<ScreenRotationMode> {
+  late Future<void> _initFuture;
+  
+  ScreenRotationNotifier() : super(ScreenRotationMode.followSystem) {
+    _initFuture = _loadRotation();
+  }
+  
+  Future<void> get initialized => _initFuture;
+
+  Future<void> _loadRotation() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rotationMode = prefs.getString(AppConstants.screenRotationKey) ?? 'followSystem';
+    state = _parseRotationMode(rotationMode);
+    _applyRotation();
+  }
+
+  ScreenRotationMode _parseRotationMode(String value) {
+    switch (value) {
+      case 'portrait':
+        return ScreenRotationMode.portrait;
+      case 'landscape':
+        return ScreenRotationMode.landscape;
+      default:
+        return ScreenRotationMode.followSystem;
+    }
+  }
+
+  String _rotationModeToString(ScreenRotationMode mode) {
+    switch (mode) {
+      case ScreenRotationMode.followSystem:
+        return 'followSystem';
+      case ScreenRotationMode.portrait:
+        return 'portrait';
+      case ScreenRotationMode.landscape:
+        return 'landscape';
+    }
+  }
+
+  Future<void> setRotationMode(ScreenRotationMode mode) async {
+    state = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(AppConstants.screenRotationKey, _rotationModeToString(mode));
+    _applyRotation();
+  }
+
+  void _applyRotation() {
+    switch (state) {
+      case ScreenRotationMode.followSystem:
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+        break;
+      case ScreenRotationMode.portrait:
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+        ]);
+        break;
+      case ScreenRotationMode.landscape:
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+        break;
+    }
+  }
 }
 
 final apiClientProvider = Provider<ApiClient>((ref) {
