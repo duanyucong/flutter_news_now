@@ -378,7 +378,17 @@ class LiveNewsNotifier extends StateNotifier<AsyncValue<List<News>>> {
   }
 }
 
-final followSourceProvider = StateProvider<String>((ref) => 'zhihu');
+final followSourceProvider = StateProvider<String>((ref) {
+  final followSources = ref.watch(followSourcesProvider);
+  if (followSources.isEmpty) {
+    return 'zhihu';
+  }
+  final firstSubscribed = followSources.firstWhere(
+    (s) => s.isSubscribed,
+    orElse: () => followSources.first,
+  );
+  return firstSubscribed.id;
+});
 
 final followNewsProvider = StateNotifierProvider<FollowNewsNotifier, AsyncValue<List<News>>>((ref) {
   final sourceId = ref.watch(followSourceProvider);
