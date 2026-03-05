@@ -39,13 +39,21 @@ class LiveScreen extends ConsumerWidget {
             return CustomScrollView(
               controller: scrollController,
               slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
+                SliverAppBar(
+                  pinned: true,
+                  floating: false,
+                  snap: false,
+                  expandedHeight: 80,
+                  backgroundColor: theme.scaffoldBackgroundColor,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 0,
+                  flexibleSpace: FlexibleSpaceBar(
+                    title: Text(
                       '实时',
                       style: theme.textTheme.headlineLarge,
                     ),
+                    centerTitle: false,
+                    titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
                   ),
                 ),
                 SliverPadding(

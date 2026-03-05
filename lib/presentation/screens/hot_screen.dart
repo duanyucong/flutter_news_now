@@ -28,21 +28,23 @@ class HotScreen extends ConsumerWidget {
                 return CustomScrollView(
                   controller: scrollController,
                   slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '热点',
-                              style: theme.textTheme.headlineLarge,
-                            ),
-                          ],
+                    SliverAppBar(
+                      pinned: true,
+                      floating: false,
+                      snap: false,
+                      expandedHeight: 80,
+                      backgroundColor: theme.scaffoldBackgroundColor,
+                      surfaceTintColor: Colors.transparent,
+                      elevation: 0,
+                      flexibleSpace: FlexibleSpaceBar(
+                        title: Text(
+                          '热点',
+                          style: theme.textTheme.headlineLarge,
                         ),
+                        centerTitle: false,
+                        titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
                       ),
                     ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 16)),
                     newsAsync.when(
                       loading: () => const SliverToBoxAdapter(
                         child: Center(
