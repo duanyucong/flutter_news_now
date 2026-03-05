@@ -67,21 +67,19 @@ class HomeScreen extends ConsumerWidget {
   }
 
   void _handleTap(BuildContext context, WidgetRef ref, int index, int currentIndex) {
-    if (index != currentIndex) {
-      // 切换页面
-      ref.read(currentNavIndexProvider.notifier).state = index;
-      return;
-    }
-
-    // 点击的是当前选中的导航项
     final lastTapTimes = ref.read(lastTapTimeProvider);
     final lastTapTime = lastTapTimes[index];
     final now = DateTime.now();
 
+    // 检测双击（500ms内再次点击同一导航项）
     if (lastTapTime != null && now.difference(lastTapTime).inMilliseconds < 500) {
-      // 双击检测（500ms内再次点击）
-      // 重置点击时间
+      // 双击：重置点击时间，跳转到对应页面并刷新数据
       ref.read(lastTapTimeProvider.notifier).state = {...lastTapTimes, index: DateTime(0)};
+      
+      // 如果不在当前页面，先切换页面
+      if (index != currentIndex) {
+        ref.read(currentNavIndexProvider.notifier).state = index;
+      }
       
       // 刷新页面数据
       _refreshPage(ref, index);
@@ -89,8 +87,16 @@ class HomeScreen extends ConsumerWidget {
       // 滚动到顶部
       _scrollToTop(ref, index);
     } else {
-      // 单击，记录点击时间
+      // 单击：记录点击时间
       ref.read(lastTapTimeProvider.notifier).state = {...lastTapTimes, index: now};
+      
+      if (index != currentIndex) {
+        // 切换到其他页面
+        ref.read(currentNavIndexProvider.notifier).state = index;
+      } else {
+        // 在当前页面，滚动到顶部
+        _scrollToTop(ref, index);
+      }
     }
   }
 
