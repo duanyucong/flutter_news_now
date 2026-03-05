@@ -12,16 +12,22 @@ class BookmarksScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final bookmarkedIds = ref.watch(bookmarksProvider);
-    final hotNewsAsync = ref.watch(hotNewsProvider);
-    final liveNewsAsync = ref.watch(liveNewsProvider);
+    final bookmarkedNews = ref.watch(bookmarksProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('我的收藏'),
         elevation: 0,
+        actions: [
+          if (bookmarkedNews.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: '清空收藏',
+              onPressed: () => _showClearDialog(context, ref),
+            ),
+        ],
       ),
-      body: _buildBookmarksList(context, ref, theme, bookmarkedIds, hotNewsAsync, liveNewsAsync),
+      body: _buildBookmarksList(context, ref, theme, bookmarkedNews),
     );
   }
 
@@ -29,21 +35,8 @@ class BookmarksScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     ThemeData theme,
-    Set<String> bookmarkedIds,
-    AsyncValue<List<News>> hotNewsAsync,
-    AsyncValue<List<News>> liveNewsAsync,
+    List<News> bookmarkedNews,
   ) {
-    final List<News> allNews = [];
-    
-    hotNewsAsync.whenData((news) {
-      allNews.addAll(news);
-    });
-    liveNewsAsync.whenData((news) {
-      allNews.addAll(news);
-    });
-    
-    final bookmarkedNews = allNews.where((news) => bookmarkedIds.contains(news.id)).toList();
-
     if (bookmarkedNews.isEmpty) {
       return const Center(
         child: Text('暂无收藏'),
@@ -68,7 +61,7 @@ class BookmarksScreen extends ConsumerWidget {
             key: Key(item.id),
             direction: DismissDirection.endToStart,
             onDismissed: (_) {
-              ref.read(bookmarksProvider.notifier).toggleBookmark(item.id);
+              ref.read(bookmarksProvider.notifier).toggleBookmark(item);
             },
             background: Container(
               alignment: Alignment.centerRight,
@@ -102,5 +95,28 @@ class BookmarksScreen extends ConsumerWidget {
         ),
       );
     }
+  }
+
+  void _showClearDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清空收藏'),
+        content: const Text('确定要清空所有收藏吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(bookmarksProvider.notifier).clearAll();
+              Navigator.pop(context);
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
   }
 }

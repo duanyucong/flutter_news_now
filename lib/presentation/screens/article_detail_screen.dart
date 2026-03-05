@@ -27,7 +27,8 @@ class ArticleDetailScreen extends ConsumerWidget {
     final hotNews = ref.watch(hotNewsProvider);
     final liveNews = ref.watch(liveNewsProvider);
     final bookmarks = ref.watch(bookmarksProvider);
-    final isBookmarked = bookmarks.contains(newsId);
+    final bookmarkedNews = bookmarks.where((n) => n.id == newsId).firstOrNull;
+    final isBookmarked = bookmarkedNews != null;
     final theme = Theme.of(context);
 
     News? news;
@@ -55,7 +56,10 @@ class ArticleDetailScreen extends ConsumerWidget {
               color: isBookmarked ? AppColors.warningColor : null,
             ),
             onPressed: () {
-              ref.read(bookmarksProvider.notifier).toggleBookmark(newsId);
+              final newsToToggle = bookmarkedNews ?? news;
+              if (newsToToggle != null) {
+                ref.read(bookmarksProvider.notifier).toggleBookmark(newsToToggle);
+              }
             },
           ),
           IconButton(

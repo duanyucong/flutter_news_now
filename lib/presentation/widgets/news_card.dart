@@ -17,7 +17,7 @@ class NewsCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isBookmarked = ref.watch(bookmarksProvider).contains(news.id);
+    final isBookmarked = ref.watch(bookmarksProvider).any((n) => n.id == news.id);
     final theme = Theme.of(context);
     final sourceConfig = Sources.getSource(news.sourceId);
 
@@ -101,7 +101,7 @@ class NewsCard extends ConsumerWidget {
         ),
         GestureDetector(
           onTap: () {
-            ref.read(bookmarksProvider.notifier).toggleBookmark(news.id);
+            ref.read(bookmarksProvider.notifier).toggleBookmark(news);
           },
           child: Icon(
             isBookmarked ? Icons.bookmark : Icons.bookmark_border,
@@ -133,7 +133,7 @@ class NewsCard extends ConsumerWidget {
   Widget _buildBookmarkButton(WidgetRef ref, bool isBookmarked) {
     return GestureDetector(
       onTap: () {
-        ref.read(bookmarksProvider.notifier).toggleBookmark(news.id);
+        ref.read(bookmarksProvider.notifier).toggleBookmark(news);
       },
       child: Container(
         width: 32,

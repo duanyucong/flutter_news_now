@@ -1,9 +1,11 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pinyin/pinyin.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
 import '../data/models/news_item.dart';
 import '../data/models/news.dart';
@@ -421,38 +423,90 @@ class FollowNewsNotifier extends StateNotifier<AsyncValue<List<News>>> {
   }
 }
 
-final bookmarksProvider = StateNotifierProvider<BookmarksNotifier, Set<String>>((ref) {
+final bookmarksProvider = StateNotifierProvider<BookmarksNotifier, List<News>>((ref) {
   return BookmarksNotifier();
 });
 
-class BookmarksNotifier extends StateNotifier<Set<String>> {
-  BookmarksNotifier() : super({}) {
+class BookmarksNotifier extends StateNotifier<List<News>> {
+  BookmarksNotifier() : super([]) {
     _loadBookmarks();
   }
 
   Future<void> _loadBookmarks() async {
     final prefs = await SharedPreferences.getInstance();
-    final bookmarks = prefs.getStringList(AppConstants.bookmarksKey) ?? [];
-    state = bookmarks.where((id) => id.isNotEmpty).toSet();
+    final bookmarksJson = prefs.getStringList(AppConstants.bookmarksKey) ?? [];
+    final bookmarks = bookmarksJson
+        .map((jsonStr) {
+          try {
+            final map = json.decode(jsonStr) as Map<String, dynamic>;
+            return News(
+              id: map['id'] ?? '',
+              title: map['title'] ?? '',
+              description: map['description'] ?? '',
+              content: map['content'] ?? '',
+              source: map['source'] ?? '',
+              sourceId: map['sourceId'] ?? '',
+              time: map['time'] ?? '',
+              timestamp: map['timestamp'] ?? 0,
+              imageUrl: map['imageUrl'],
+              likes: map['likes'] ?? 0,
+              comments: map['comments'] ?? 0,
+              category: map['category'] ?? 'hot',
+              url: map['url'],
+            );
+          } catch (e) {
+            return null;
+          }
+        })
+        .whereType<News>()
+        .where((news) => news.id.isNotEmpty)
+        .toList();
+    state = bookmarks;
   }
 
-  Future<void> toggleBookmark(String newsId) async {
-    if (newsId.isEmpty) return;
+  Future<void> toggleBookmark(News news) async {
+    if (news.id.isEmpty) return;
     
-    final newSet = Set<String>.from(state);
-    if (newSet.contains(newsId)) {
-      newSet.remove(newsId);
+    final existingIndex = state.indexWhere((n) => n.id == news.id);
+    if (existingIndex != -1) {
+      state = [...state]..removeAt(existingIndex);
     } else {
-      newSet.add(newsId);
+      state = [news, ...state];
     }
-    state = newSet;
     
+    await _saveBookmarks();
+  }
+
+  Future<void> _saveBookmarks() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(AppConstants.bookmarksKey, newSet.toList());
+    final bookmarksJson = state.map((news) {
+      return json.encode({
+        'id': news.id,
+        'title': news.title,
+        'description': news.description,
+        'content': news.content,
+        'source': news.source,
+        'sourceId': news.sourceId,
+        'time': news.time,
+        'timestamp': news.timestamp,
+        'imageUrl': news.imageUrl,
+        'likes': news.likes,
+        'comments': news.comments,
+        'category': news.category,
+        'url': news.url,
+      });
+    }).toList();
+    await prefs.setStringList(AppConstants.bookmarksKey, bookmarksJson);
   }
 
   bool isBookmarked(String newsId) {
-    return state.contains(newsId);
+    return state.any((news) => news.id == newsId);
+  }
+
+  Future<void> clearAll() async {
+    state = [];
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(AppConstants.bookmarksKey);
   }
 }
 
@@ -474,32 +528,23 @@ class ReadHistoryNotifier extends StateNotifier<List<News>> {
     state = history;
   }
 
-  Map<String, dynamic> _decodeJson(String json) {
+  Map<String, dynamic> _decodeJson(String jsonString) {
     try {
-      return Map<String, dynamic>.from(
-        json.split(',').fold<Map<String, dynamic>>({}, (map, item) {
-          final parts = item.split(':');
-          if (parts.length >= 2) {
-            final key = parts[0].trim();
-            final value = parts.sublist(1).join(':').trim();
-            if (value.startsWith('"') && value.endsWith('"')) {
-              map[key] = value.substring(1, value.length - 1);
-            } else if (int.tryParse(value) != null) {
-              map[key] = int.parse(value);
-            } else {
-              map[key] = value;
-            }
-          }
-          return map;
-        }),
-      );
+      return json.decode(jsonString) as Map<String, dynamic>;
     } catch (e) {
       return {};
     }
   }
 
   String _encodeJson(News news) {
-    return '{"id":"${news.id}","title":"${news.title}","source":"${news.source}","sourceId":"${news.sourceId}","time":"${news.time}","url":"${news.url ?? ""}"}';
+    return json.encode({
+      'id': news.id,
+      'title': news.title,
+      'source': news.source,
+      'sourceId': news.sourceId,
+      'time': news.time,
+      'url': news.url ?? '',
+    });
   }
 
   Future<void> addToHistory(News news) async {
