@@ -356,8 +356,9 @@ String _formatRelativeTime(int timestamp) {
   } else if (diff < 604800000) {
     return '${diff ~/ 86400000}天前';
   } else {
-    final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return DateFormat('MM-dd').format(dateTime);
+    return '更久前';
+    // final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    // return DateFormat('MM-dd').format(dateTime);
   }
 }
 
@@ -400,6 +401,31 @@ String _getFirstLetter(String title) {
   return pinyin[0].toUpperCase();
 }
 
+Future<List<News>> _loadCachedNews(String cacheKey) async {
+  final prefs = await SharedPreferences.getInstance();
+  final cachedJson = prefs.getStringList(cacheKey);
+  if (cachedJson == null || cachedJson.isEmpty) {
+    return [];
+  }
+  return cachedJson
+      .map((jsonStr) {
+        try {
+          final map = json.decode(jsonStr) as Map<String, dynamic>;
+          return News.fromJson(map);
+        } catch (e) {
+          return null;
+        }
+      })
+      .whereType<News>()
+      .toList();
+}
+
+Future<void> _saveCachedNews(String cacheKey, List<News> news) async {
+  final prefs = await SharedPreferences.getInstance();
+  final newsJson = news.map((n) => json.encode(n.toJson())).toList();
+  await prefs.setStringList(cacheKey, newsJson);
+}
+
 final hotNewsProvider = StateNotifierProvider<HotNewsNotifier, AsyncValue<List<News>>>((ref) {
   final notifier = HotNewsNotifier(ref);
   ref.listen(hottestSourcesProvider, (_, __) {
@@ -413,21 +439,33 @@ final hotNewsProvider = StateNotifierProvider<HotNewsNotifier, AsyncValue<List<N
 
 class HotNewsNotifier extends StateNotifier<AsyncValue<List<News>>> {
   final Ref ref;
+  List<News> _cachedNews = [];
+  bool _isInitialLoad = true;
   
   HotNewsNotifier(this.ref) : super(const AsyncValue.loading()) {
-    loadNews();
+    _loadWithCache();
   }
 
+  Future<void> _loadWithCache() async {
+    _cachedNews = await _loadCachedNews(AppConstants.hotNewsCacheKey);
+    if (_cachedNews.isNotEmpty) {
+      state = AsyncValue.data(_cachedNews);
+    }
+    await loadNews();
+  }
+  
   Future<void> loadNews() async {
-    state = const AsyncValue.loading();
+    if (_isInitialLoad && _cachedNews.isNotEmpty) {
+      state = AsyncValue.data(_cachedNews);
+    }
+    _isInitialLoad = false;
+    
     try {
       final repository = ref.read(newsRepositoryProvider);
       final sources = ref.read(hottestSourcesProvider);
       
       final responses = await repository.getEntireSources(sources);
       final interleavedNews = _interleaveBySource(responses);
-      
-      state = AsyncValue.data(interleavedNews);
       
       final followSources = ref.read(followSourcesProvider);
       if (followSources.isNotEmpty) {
@@ -438,15 +476,22 @@ class HotNewsNotifier extends StateNotifier<AsyncValue<List<News>>> {
         if (subscribedSources.isNotEmpty) {
           final newResponses = await repository.getEntireSources(subscribedSources);
           final newNews = _interleaveBySource(newResponses);
-          state = AsyncValue.data(newNews);
+          interleavedNews.insertAll(0, newNews);
         }
       }
+      
+      _cachedNews = interleavedNews;
+      await _saveCachedNews(AppConstants.hotNewsCacheKey, interleavedNews);
+      state = AsyncValue.data(interleavedNews);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (_cachedNews.isEmpty) {
+        state = AsyncValue.error(e, st);
+      }
     }
   }
 
   Future<void> refresh() async {
+    _isInitialLoad = false;
     await loadNews();
   }
 }
@@ -464,21 +509,33 @@ final liveNewsProvider = StateNotifierProvider<LiveNewsNotifier, AsyncValue<List
 
 class LiveNewsNotifier extends StateNotifier<AsyncValue<List<News>>> {
   final Ref ref;
+  List<News> _cachedNews = [];
+  bool _isInitialLoad = true;
   
   LiveNewsNotifier(this.ref) : super(const AsyncValue.loading()) {
-    loadNews();
+    _loadWithCache();
   }
 
+  Future<void> _loadWithCache() async {
+    _cachedNews = await _loadCachedNews(AppConstants.liveNewsCacheKey);
+    if (_cachedNews.isNotEmpty) {
+      state = AsyncValue.data(_cachedNews);
+    }
+    await loadNews();
+  }
+  
   Future<void> loadNews() async {
-    state = const AsyncValue.loading();
+    if (_isInitialLoad && _cachedNews.isNotEmpty) {
+      state = AsyncValue.data(_cachedNews);
+    }
+    _isInitialLoad = false;
+    
     try {
       final repository = ref.read(newsRepositoryProvider);
       final sources = ref.read(realtimeSourcesProvider);
       
       final responses = await repository.getEntireSources(sources);
       final interleavedNews = _interleaveBySource(responses);
-      
-      state = AsyncValue.data(interleavedNews);
       
       final followSources = ref.read(followSourcesProvider);
       if (followSources.isNotEmpty) {
@@ -489,11 +546,17 @@ class LiveNewsNotifier extends StateNotifier<AsyncValue<List<News>>> {
         if (subscribedSources.isNotEmpty) {
           final newResponses = await repository.getEntireSources(subscribedSources);
           final newNews = _interleaveBySource(newResponses);
-          state = AsyncValue.data(newNews);
+          interleavedNews.insertAll(0, newNews);
         }
       }
+      
+      _cachedNews = interleavedNews;
+      await _saveCachedNews(AppConstants.liveNewsCacheKey, interleavedNews);
+      state = AsyncValue.data(interleavedNews);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (_cachedNews.isEmpty) {
+        state = AsyncValue.error(e, st);
+      }
     }
   }
 
@@ -522,21 +585,42 @@ final followNewsProvider = StateNotifierProvider<FollowNewsNotifier, AsyncValue<
 class FollowNewsNotifier extends StateNotifier<AsyncValue<List<News>>> {
   final Ref ref;
   final String sourceId;
+  List<News> _cachedNews = [];
+  bool _isInitialLoad = true;
   
   FollowNewsNotifier(this.ref, this.sourceId) : super(const AsyncValue.loading()) {
-    loadNews();
+    _loadWithCache();
   }
 
+  Future<void> _loadWithCache() async {
+    final cacheKey = '${AppConstants.followNewsCacheKey}_$sourceId';
+    _cachedNews = await _loadCachedNews(cacheKey);
+    if (_cachedNews.isNotEmpty) {
+      state = AsyncValue.data(_cachedNews);
+    }
+    await loadNews();
+  }
+  
   Future<void> loadNews() async {
-    state = const AsyncValue.loading();
+    if (_isInitialLoad && _cachedNews.isNotEmpty) {
+      state = AsyncValue.data(_cachedNews);
+    }
+    _isInitialLoad = false;
+    
     try {
       final repository = ref.read(newsRepositoryProvider);
       final response = await repository.getSource(sourceId, latest: true);
       
       final news = response.items.map((item) => _convertToNews(item, response.id)).toList();
+      
+      _cachedNews = news;
+      final cacheKey = '${AppConstants.followNewsCacheKey}_$sourceId';
+      await _saveCachedNews(cacheKey, news);
       state = AsyncValue.data(news);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (_cachedNews.isEmpty) {
+        state = AsyncValue.error(e, st);
+      }
     }
   }
 
