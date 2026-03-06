@@ -131,6 +131,7 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
             Future.delayed(const Duration(milliseconds: 500), () {
               if (mounted) {
                 _injectDarkModeCss();
+                _injectVideoSupport();
               }
             });
           },
@@ -320,6 +321,67 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
     }
   }
 
+  Future<void> _injectVideoSupport() async {
+    await _controller.runJavaScript('''
+      (function() {
+        // 启用视频全屏播放
+        document.addEventListener('DOMContentLoaded', function() {
+          var videos = document.querySelectorAll('video');
+          videos.forEach(function(video) {
+            video.setAttribute('webkit-playsinline', 'true');
+            video.setAttribute('playsinline', 'true');
+            video.setAttribute('x5-video-player-type', 'h5');
+            video.setAttribute('x5-video-player-fullscreen', 'false');
+          });
+        });
+
+        // 监听动态加载的视频
+        if (window.videoObserver) {
+          window.videoObserver.disconnect();
+        }
+        
+        window.videoObserver = new MutationObserver(function(mutations) {
+          mutations.forEach(function(mutation) {
+            mutation.addedNodes.forEach(function(node) {
+              if (node.nodeName === 'VIDEO') {
+                node.setAttribute('webkit-playsinline', 'true');
+                node.setAttribute('playsinline', 'true');
+                node.setAttribute('x5-video-player-type', 'h5');
+                node.setAttribute('x5-video-player-fullscreen', 'false');
+              } else if (node.querySelectorAll) {
+                var videos = node.querySelectorAll('video');
+                videos.forEach(function(video) {
+                  video.setAttribute('webkit-playsinline', 'true');
+                  video.setAttribute('playsinline', 'true');
+                  video.setAttribute('x5-video-player-type', 'h5');
+                  video.setAttribute('x5-video-player-fullscreen', 'false');
+                });
+              }
+            });
+          });
+        });
+        
+        window.videoObserver.observe(document.body, { 
+          childList: true, 
+          subtree: true 
+        });
+
+        // 处理 iframe 中的视频
+        var iframes = document.querySelectorAll('iframe');
+        iframes.forEach(function(iframe) {
+          try {
+            var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            var iframeVideos = iframeDoc.querySelectorAll('video');
+            iframeVideos.forEach(function(video) {
+              video.setAttribute('webkit-playsinline', 'true');
+              video.setAttribute('playsinline', 'true');
+            });
+          } catch(e) {}
+        });
+      })();
+    ''');
+  }
+
   Future<void> _loadUrl() async {
     if (widget.url.isEmpty) {
       setState(() {
@@ -344,6 +406,7 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
     
     try {
       await _controller.loadRequest(Uri.parse(widget.url));
+      _injectVideoSupport();
     } catch (e) {
       debugPrint('Load request failed: $e');
       _loadingTimer?.cancel();
@@ -372,6 +435,7 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
     
     try {
       await _controller.loadRequest(Uri.parse(url));
+      _injectVideoSupport();
     } catch (e) {
       debugPrint('Load request failed: $e');
       _loadingTimer?.cancel();
@@ -444,7 +508,14 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
     });
     if (_pageLoaded) {
       _injectDarkModeCss();
+      _injectVideoSupport();
     }
+  }
+
+  void _toggleJavascript() {
+    ref.read(webViewSettingsProvider.notifier).setJavascriptEnabled(!_webViewSettings.javascriptEnabled);
+    _webViewSettings = ref.read(webViewSettingsProvider);
+    _initWebView();
   }
 
   Future<void> _openInBrowser(String? url) async {
@@ -520,7 +591,9 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
                 _isLoading = true;
                 _retryCount = 0;
               });
-              _controller.reload();
+              _controller.reload().then((_) {
+                _injectVideoSupport();
+              });
             },
           ),
           IconButton(
@@ -542,6 +615,9 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
                   break;
                 case 'darkMode':
                   _toggleDarkMode();
+                  break;
+                case 'javascript':
+                  _toggleJavascript();
                   break;
                 case 'settings':
                   Navigator.push(
@@ -602,6 +678,16 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
                     Icon(_isDarkMode ? Icons.light_mode : Icons.dark_mode),
                     const SizedBox(width: 8),
                     Text(_isDarkMode ? '浅色模式' : '深色模式'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'javascript',
+                child: Row(
+                  children: [
+                    Icon(_webViewSettings.javascriptEnabled ? Icons.check_circle : Icons.cancel),
+                    const SizedBox(width: 8),
+                    Text(_webViewSettings.javascriptEnabled ? 'JavaScript: 开' : 'JavaScript: 关'),
                   ],
                 ),
               ),
