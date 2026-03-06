@@ -167,7 +167,6 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
               return;
             }
             
-            _controller.loadHtmlString('<html><body></body></html>');
             setState(() {
               _hasError = true;
               _isLoading = false;
@@ -399,7 +398,6 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
       });
     } else {
       // 重试次数用尽，显示错误
-      _controller.loadHtmlString('<html><body></body></html>');
       setState(() {
         _hasError = true;
         _isLoading = false;
@@ -623,10 +621,7 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
       ),
       body: Stack(
         children: [
-          if (_hasError)
-            Positioned.fill(child: _buildErrorView())
-          else
-            WebViewWidget(controller: _controller),
+          WebViewWidget(controller: _controller),
 
           if (_blockedUrl != null)
             Positioned(
@@ -634,6 +629,14 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
               right: 0,
               bottom: 0,
               child: _buildBlockedBanner(),
+            ),
+          
+          if (_hasError && _lastError != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildErrorBanner(),
             ),
         ],
       ),
@@ -689,60 +692,89 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
     );
   }
 
-  Widget _buildErrorView() {
+  void _hideErrorBanner() {
+    setState(() {
+      _hasError = false;
+      _lastError = null;
+    });
+  }
+
+  Widget _buildErrorBanner() {
     return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Colors.grey[400],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '无法加载网页',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _lastError ?? '网络连接失败',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _currentUrl = '';
-                        _lastError = null;
-                        _isLoading = true;
-                      });
-                      _controller.reload();
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('重试'),
-                  ),
-                  const SizedBox(width: 16),
-                  OutlinedButton.icon(
-                    onPressed: () => _openInBrowser(widget.url),
-                    icon: const Icon(Icons.open_in_browser),
-                    label: const Text('用浏览器打开'),
-                  ),
-                ],
-              ),
-            ],
-          ),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 8,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        border: Border(
+          top: BorderSide(color: Colors.red.shade300),
         ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: Colors.red.shade800, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '网页加载失败',
+                  style: TextStyle(color: Colors.red.shade900, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _lastError ?? '网络连接失败',
+                  style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _currentUrl = '';
+                _lastError = null;
+                _isLoading = true;
+                _hasError = false;
+              });
+              _controller.reload();
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              '重试',
+              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _openInBrowser(widget.url),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              '浏览器',
+              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+            ),
+          ),
+          IconButton(
+            onPressed: _hideErrorBanner,
+            icon: Icon(Icons.close, color: Colors.red.shade800, size: 18),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
       ),
     );
   }
