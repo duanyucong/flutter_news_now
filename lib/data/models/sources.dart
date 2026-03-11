@@ -306,7 +306,7 @@ class Sources {
     ),
     'ithome': SourceConfig(
       id: 'ithome',
-      name: 'IT之家',
+      name: 'IT 之家',
       type: 'realtime',
       column: 'tech',
       color: 'red',
@@ -315,7 +315,7 @@ class Sources {
     ),
     '36kr-quick': SourceConfig(
       id: '36kr-quick',
-      name: '36氪',
+      name: '36 氪',
       title: '快讯',
       type: 'realtime',
       column: 'tech',
@@ -344,7 +344,7 @@ class Sources {
     ),
     '36kr-renqi': SourceConfig(
       id: '36kr-renqi',
-      name: '36氪',
+      name: '36 氪',
       title: '人气榜',
       type: 'hottest',
       column: 'tech',

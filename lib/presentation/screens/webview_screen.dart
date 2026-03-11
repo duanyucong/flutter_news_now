@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -91,7 +92,7 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
         : 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
     
     _controller = WebViewController()
-      ..setJavaScriptMode(_webViewSettings.javascriptEnabled ? JavaScriptMode.unrestricted : JavaScriptMode.disabled)
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent(userAgent)
       ..setBackgroundColor(bgColor)
       ..enableZoom(!_webViewSettings.noImageMode)
@@ -513,9 +514,7 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
   }
 
   void _toggleJavascript() {
-    ref.read(webViewSettingsProvider.notifier).setJavascriptEnabled(!_webViewSettings.javascriptEnabled);
-    _webViewSettings = ref.read(webViewSettingsProvider);
-    _initWebView();
+    // JavaScript 保持开启状态，不再提供切换选项
   }
 
   Future<void> _openInBrowser(String? url) async {
@@ -523,10 +522,10 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
     try {
       final uri = Uri.parse(url);
       debugPrint('Attempting to open URL: $url');
-      
+        
       final canLaunch = await canLaunchUrl(uri);
       debugPrint('Can launch URL: $canLaunch');
-      
+        
       if (canLaunch) {
         debugPrint('Launching URL with mode: LaunchMode.externalApplication');
         final result = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -543,7 +542,112 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
       debugPrint('Error opening URL: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('打开链接失败: $e')),
+          SnackBar(content: Text('打开链接失败：$e')),
+        );
+      }
+    }
+  }
+  
+  void _showOpenWithDialog() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.open_in_browser),
+                title: const Text('用浏览器打开'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openInBrowser(widget.url);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share),
+                title: const Text('分享到微信'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _shareCurrentPage();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _shareCurrentPage() async {
+    final urlToShare = _currentUrl ?? widget.url;
+    final titleToShare = widget.news?.title ?? widget.title;
+    
+    if (urlToShare.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('当前页面链接无效')),
+        );
+      }
+      return;
+    }
+    
+    try {
+      // 复制链接到剪贴板
+      final shareText = titleToShare.isNotEmpty 
+          ? '$titleToShare\n$urlToShare' 
+          : urlToShare;
+      
+      await Clipboard.setData(ClipboardData(text: shareText));
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('链接已复制到剪贴板'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+      
+      // 延迟后跳转到微信
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _openWeChat();
+    } catch (e) {
+      debugPrint('Error sharing: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('分享失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openWeChat() async {
+    // 使用 weixin:// URL Scheme 打开微信
+    final uri = Uri.parse('weixin://');
+    
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        // 无法打开微信时的提示
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('请先安装微信应用'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error launching WeChat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('打开微信失败，请检查是否已安装微信'),
+            duration: Duration(seconds: 2),
+          ),
         );
       }
     }
@@ -598,8 +702,8 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.open_in_browser),
-            tooltip: '用浏览器打开',
-            onPressed: () => _openInBrowser(widget.url),
+            tooltip: '打开方式',
+            onPressed: () => _showOpenWithDialog(),
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -615,9 +719,6 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
                   break;
                 case 'darkMode':
                   _toggleDarkMode();
-                  break;
-                case 'javascript':
-                  _toggleJavascript();
                   break;
                 case 'settings':
                   Navigator.push(
@@ -637,6 +738,9 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
                       _initWebView();
                     }
                   });
+                  break;
+                case 'share':
+                  _shareCurrentPage();
                   break;
               }
             },
@@ -678,16 +782,6 @@ class _WebViewScreenState extends ConsumerState<WebViewScreen> {
                     Icon(_isDarkMode ? Icons.light_mode : Icons.dark_mode),
                     const SizedBox(width: 8),
                     Text(_isDarkMode ? '浅色模式' : '深色模式'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'javascript',
-                child: Row(
-                  children: [
-                    Icon(_webViewSettings.javascriptEnabled ? Icons.check_circle : Icons.cancel),
-                    const SizedBox(width: 8),
-                    Text(_webViewSettings.javascriptEnabled ? 'JavaScript: 开' : 'JavaScript: 关'),
                   ],
                 ),
               ),
